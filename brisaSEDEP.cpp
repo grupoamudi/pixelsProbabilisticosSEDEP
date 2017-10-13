@@ -39,7 +39,9 @@ typedef struct {
 } hsv;
 
 static rgb   hsv2rgb(hsv in);
+double getRandom(double mu, double sigma, double min, double max);
 
+/*This function converts a color described in the HSV format to RGB format*/
 rgb hsv2rgb(hsv in)
 {
     double      hh, p, q, t, ff;
@@ -98,6 +100,8 @@ rgb hsv2rgb(hsv in)
     return out;     
 }
 
+/*This function return a constrained random value with normal distribution*/
+/*It uses box-muller to convert from the constrained uniform distribution of the rand() function*/
 double getRandom(double mu, double sigma, double min, double max)
 {
     static const double epsilon = std::numeric_limits<double>::min();
@@ -138,34 +142,35 @@ int main( int argc, char** argv )
 {
     srand(time(NULL));
 
-    ifstream myfile;
-    myfile.open("test.res", ios::out | ios::app | ios::binary);
-    uint16_t *full_mus[N_PATTERNS];
-    uint16_t *mus = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *mus_flag_1 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *mus_flag_2 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *mus_flag_3 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *mus_amudi = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+    /* Allocate all the pattern buffers and place them in the desired order */
+    /* color buffers are for the hue value of HSV (ranging from 0 to 360)*/
+    /* sigma buffers are for the standard deviation, they are double */
+    uint16_t *full_color[N_PATTERNS];
+    uint16_t *color = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+    uint16_t *color_flag_1 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+    uint16_t *color_flag_2 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+    uint16_t *color_flag_3 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+    uint16_t *color_amudi = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
     double *full_sigmas[N_PATTERNS];
     double *sigmas = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
     double *sigmas_amudi = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
     double *sigmas_flag = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
     double *sigmas_base = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
-    full_mus[0] = mus_flag_1;
-    full_mus[1] = mus_flag_2;
-    full_mus[2] = mus_flag_3;
-    full_mus[3] = mus_flag_2;
-    full_mus[4] = mus_flag_1;
-    full_mus[5] = mus_flag_2;
-    full_mus[6] = mus_flag_3;
-    full_mus[7] = mus_flag_2;
-    full_mus[8] = mus_flag_1;
-    full_mus[9] = mus_flag_2;
-    full_mus[10] = mus_flag_3;
-    full_mus[11] = mus_flag_2;
-    full_mus[12] = mus_flag_1;
-    full_mus[13] = mus_flag_2;
-    full_mus[14] = mus_flag_3;
+    full_color[0] = color_flag_1;
+    full_color[1] = color_flag_2;
+    full_color[2] = color_flag_3;
+    full_color[3] = color_flag_2;
+    full_color[4] = color_flag_1;
+    full_color[5] = color_flag_2;
+    full_color[6] = color_flag_3;
+    full_color[7] = color_flag_2;
+    full_color[8] = color_flag_1;
+    full_color[9] = color_flag_2;
+    full_color[10] = color_flag_3;
+    full_color[11] = color_flag_2;
+    full_color[12] = color_flag_1;
+    full_color[13] = color_flag_2;
+    full_color[14] = color_flag_3;
     full_sigmas[0] = sigmas_base;
     full_sigmas[1] = sigmas_flag;
     full_sigmas[2] = sigmas_flag;
@@ -181,6 +186,11 @@ int main( int argc, char** argv )
     full_sigmas[12] = sigmas_base;
     full_sigmas[13] = sigmas_amudi;
     full_sigmas[14] = sigmas_flag;
+
+    /*Read file to load a pattern
+      this file is generatad by running the scripts createImage.py  parseImages.py*/
+    ifstream myfile;
+    myfile.open("test.res", ios::out | ios::app | ios::binary);
     for(uint32_t readcntr = 0; readcntr < WIDTH*HEIGHT; readcntr++)
     {
         char buff[READ_SIZE];
@@ -198,14 +208,28 @@ int main( int argc, char** argv )
             uint8_t temp = ((uint8_t *)&hue)[0];
             ((uint8_t *)&hue)[0] = ((uint8_t *)&hue)[1];
             ((uint8_t *)&hue)[1] = temp;
-            mus[3*readcntr + 0] = hue;
-            mus[3*readcntr + 1] = 1;
-            mus[3*readcntr + 2] = 1;
+            color[3*readcntr + 0] = hue;
+            color[3*readcntr + 1] = 1;
+            color[3*readcntr + 2] = 1;
             sigmas_amudi[readcntr] = std;
 
         }
     }
     myfile.close();
+    /*Create some other patterns*/
+    for (uint16_t y = 0; y < HEIGHT; y++)
+    {
+        for(uint16_t x = 0; x < WIDTH; x++)
+        {
+            color_flag_1[3*(y*WIDTH + x) + 0] = 360*(((double)x)/WIDTH); 
+            color_flag_2[3*(y*WIDTH + x) + 0] = ((int)(360*(((double)x)/WIDTH)) + 50)%360; 
+            color_flag_3[3*(y*WIDTH + x) + 0] = ((int)(360*(((double)x)/WIDTH)) + 100)%360; 
+            sigmas_flag[y*WIDTH + x] = 5;//pow(2,10*(((double)x)/WIDTH));
+            sigmas_base[y*WIDTH + x] = 10000;
+        }
+    }
+
+    /*Initialize SDL things*/
     SDL_Init( SDL_INIT_EVERYTHING );
     atexit( SDL_Quit );
 
@@ -226,13 +250,6 @@ int main( int argc, char** argv )
 
     SDL_RendererInfo info;
     SDL_GetRendererInfo( renderer, &info );
-    cout << "Renderer name: " << info.name << endl;
-    cout << "Texture formats: " << endl;
-    for( Uint32 i = 0; i < info.num_texture_formats; i++ )
-    {
-        cout << SDL_GetPixelFormatName( info.texture_formats[i] ) << endl;
-    }
-
     SDL_Texture* texture = SDL_CreateTexture
         (
         renderer,
@@ -240,43 +257,35 @@ int main( int argc, char** argv )
         SDL_TEXTUREACCESS_STREAMING,
         WIDTH, HEIGHT
         );
+    SDL_Event event;
 
-    //vector< unsigned char > pixels( texWidth * texHeight * 4, 0 );
 
+    /*pixels will hold all the N_BUFFERS of pixel to draw*/
     pixel *pixels = (pixel*)malloc(PIXELS_PER_RUN*sizeof(pixel)*N_BUFFERS);
     memset(pixels, 0, PIXELS_PER_RUN*sizeof(pixel)*N_BUFFERS);
+
+    /*final_pixels are the actually 1920x1080 pixel description*/
     uint8_t *final_pixels = (uint8_t*)malloc(SIZE_PIXELS);
+    memset(final_pixels, 0, SIZE_PIXELS);
 
-
-    for (uint16_t y = 0; y < HEIGHT; y++)
-    {
-        for(uint16_t x = 0; x < WIDTH; x++)
-        {
-            mus_flag_1[3*(y*WIDTH + x) + 0] = 360*(((double)x)/WIDTH); 
-            mus_flag_2[3*(y*WIDTH + x) + 0] = ((int)(360*(((double)x)/WIDTH)) + 50)%360; 
-            mus_flag_3[3*(y*WIDTH + x) + 0] = ((int)(360*(((double)x)/WIDTH)) + 100)%360; 
-            sigmas_flag[y*WIDTH + x] = 5;//pow(2,10*(((double)x)/WIDTH));
-            sigmas_base[y*WIDTH + x] = 10000;
-        }
-    }  
-    SDL_Event event;
+  
     bool running = true;
     uint16_t cntr = 0;
     uint32_t full_cntr = 0;
-    uint16_t sigma_state = 0, last_sigma_state = 0;
+    uint16_t sigma_state = 0;
+
+    /*Load the initial pattern*/
     for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
     {
         sigmas[sigma_cntr] = full_sigmas[sigma_state][sigma_cntr]; 
-        mus[sigma_cntr*3 + 0] = full_mus[sigma_state][sigma_cntr*3 + 0]; 
+        color[sigma_cntr*3 + 0] = full_color[sigma_state][sigma_cntr*3 + 0]; 
     }
+
     while( running )
     {
-        const Uint64 start = SDL_GetPerformanceCounter();
 
-        if (cntr >= N_BUFFERS)
-        {
-            cntr = 0;
-        }
+
+        /*Change to the next pattern*/
         if (((full_cntr+1)%150) == 0)
         {
             sigma_state += 1;
@@ -285,16 +294,26 @@ int main( int argc, char** argv )
                 sigma_state = 0;
             }
         }
+        /*This creates a soft pattern change, by applying the pattern slowly on top of the old one*/
         for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
         {
             sigmas[sigma_cntr] = sigmas[sigma_cntr]*0.9 + full_sigmas[sigma_state][sigma_cntr]*0.1; 
-            mus[sigma_cntr*3 + 0] = mus[sigma_cntr*3 + 0]*0.9 + full_mus[sigma_state][sigma_cntr*3 + 0]*0.1;
+            color[sigma_cntr*3 + 0] = color[sigma_cntr*3 + 0]*0.9 + full_color[sigma_state][sigma_cntr*3 + 0]*0.1;
         }
+
+         /*Jump through the N_BUFFERS*/
+        if (cntr >= N_BUFFERS)
+        {
+            cntr = 0;
+        }       
+        /*Clear the buffer for this run*/
         memset(&pixels[cntr*PIXELS_PER_RUN*sizeof(pixel)], 0, PIXELS_PER_RUN*sizeof(pixels));
 
+        /*Place SDL background*/
         SDL_SetRenderDrawColor( renderer, 0, 0, 0, SDL_ALPHA_OPAQUE );
         SDL_RenderClear( renderer );
 
+        /*Poll for esc key*/
         while( SDL_PollEvent( &event ) )
         {
             if( ( SDL_QUIT == event.type ) ||
@@ -305,52 +324,40 @@ int main( int argc, char** argv )
             }
         }
 
-        // splat down some random pixels
+        /*Create the random pixels*/
         hsv hsv_val;
         rgb rgb_val;
         hsv_val.s = 1.0;
         hsv_val.v = 1.0;
         cout << sigma_state << "; " << full_cntr << "                                     \r";
 #if GLOBAL_SIGMA
-        if (full_cntr > 2000)
-        {
-            cout << ":(\n";
-            break;
-        }
         double sigma = pow(2,abs((double)full_cntr - 1000.0)/100);
 #endif  
         for( unsigned int i = 0; i < PIXELS_PER_RUN; i++ )
         {
+            /*Get a random position within the image*/
             const unsigned int x = rand() % WIDTH;
             const unsigned int y = rand() % HEIGHT;
 
-            //const unsigned int offset = SIZE_PIXELS + ( WIDTH * 4 * y ) + x * 4;
+            /*Get the sigma from table*/
 #if not GLOBAL_SIGMA
             double sigma = sigmas[y*WIDTH + x]; 
 #endif
-            hsv_val.h = getRandom(mus[3*(y*WIDTH + x) + 0],sigma,0,360); 
+            /*Get a random hue value and convert it to rgb*/
+            hsv_val.h = getRandom(color[3*(y*WIDTH + x) + 0],sigma,0,360); 
             rgb_val = hsv2rgb(hsv_val);
 
-            pixels[PIXELS_PER_RUN*cntr + i].b = (int)(rgb_val.b*255); /*b*/
-            pixels[PIXELS_PER_RUN*cntr + i].g = (int)(rgb_val.g*255); /*g*/       
-            pixels[PIXELS_PER_RUN*cntr + i].r = (int)(rgb_val.r*255); /*r*/
+            /*Store the value in the buuffer*/
+            pixels[PIXELS_PER_RUN*cntr + i].b = (int)(rgb_val.b*255);
+            pixels[PIXELS_PER_RUN*cntr + i].g = (int)(rgb_val.g*255);       
+            pixels[PIXELS_PER_RUN*cntr + i].r = (int)(rgb_val.r*255);
             pixels[PIXELS_PER_RUN*cntr + i].x = x;
             pixels[PIXELS_PER_RUN*cntr + i].y = y;
-            //SDL_APLHA_OPAQUE
         }
 
-        //unsigned char* lockedPixels;
-        //int pitch;
-        //SDL_LockTexture
-        //    (
-        //    texture,
-        //    NULL,
-        //    reinterpret_cast< void** >( &lockedPixels ),
-        //    &pitch
-        //    );
-        //std::copy( pixels.begin(), pixels.end(), lockedPixels );
-        //SDL_UnlockTexture( texture );
+        /*Clear the final buffer*/
         memset(final_pixels, 0, SIZE_PIXELS);
+        /*Fill final_pixels with the pixels described at each buffer*/
         for (uint16_t sub_cntr = 0; sub_cntr < N_BUFFERS; sub_cntr++)
         {
             for (uint16_t i = 0; i <  PIXELS_PER_RUN; i++)
@@ -366,6 +373,8 @@ int main( int argc, char** argv )
                 }
             }
         }
+
+        /*Update and render the screen*/
         SDL_UpdateTexture
             (
             texture,
@@ -373,14 +382,9 @@ int main( int argc, char** argv )
             &final_pixels[0],
             WIDTH * 4
             );
-
         SDL_RenderCopy( renderer, texture, NULL, NULL );
         SDL_RenderPresent( renderer );
 
-        const Uint64 end = SDL_GetPerformanceCounter();
-        const static Uint64 freq = SDL_GetPerformanceFrequency();
-        const double seconds = ( end - start ) / static_cast< double >( freq );
-        //cout << "Frame time: " << seconds * 1000.0 << "ms" << endl;
         cntr += 1;
         full_cntr += 1;
     }
