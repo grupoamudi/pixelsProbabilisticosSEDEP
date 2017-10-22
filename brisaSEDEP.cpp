@@ -14,7 +14,7 @@ using namespace std;
 #define HEIGHT          1080 
 #define N_BUFFERS       100
 #define SIZE_PIXELS     (WIDTH*HEIGHT*4)
-#define PIXELS_PER_RUN  1000
+#define PIXELS_PER_RUN  250
 
 #define GLOBAL_SIGMA    0
 
@@ -28,6 +28,7 @@ typedef struct {
     uint8_t r;
     uint8_t g;
     uint8_t b;
+    uint8_t format;
     uint16_t x;
     uint16_t y;
 } pixel;
@@ -38,8 +39,112 @@ typedef struct {
     double v;       // a fraction between 0 and 1
 } hsv;
 
+typedef struct {
+    uint8_t width;
+    uint8_t height;
+    uint8_t center_x;
+    uint8_t center_y;
+    uint8_t *pattern;
+} geometric_form;
+
 static rgb   hsv2rgb(hsv in);
 double getRandom(double mu, double sigma, double min, double max);
+
+void testForm(geometric_form *form)
+{
+    for(uint8_t y = 0; y < form->height; y++)
+    {
+        for(uint8_t x = 0; x < form->width; x++)
+        {
+            cout << form->pattern[y*form->width + x]/0xFF << ",";
+        }
+        cout << "\n";
+    }
+}
+
+void createTriangle(uint8_t radius, geometric_form *form)
+{
+    /* First allocate space to create the pattern */
+    form->width = 2*radius + 1;
+    form->height = 2*radius + 1;
+    form->center_x = radius;
+    form->center_y = radius;
+    form->pattern = (uint8_t *)malloc(form->width*form->height);
+    memset(form->pattern, 0, (2*radius + 1)*(2*radius + 1));
+    uint8_t x = 0;
+    for(uint8_t y = (form->height-1); y >= radius; y--)
+    {
+        memset(&form->pattern[y*form->width + x], 0xFF, y-x+1);
+        x++;
+    }
+}
+
+void createSquare(uint8_t radius, geometric_form *form)
+{
+    /* First allocate space to create the pattern */
+    form->width = 2*radius + 1;
+    form->height = 2*radius + 1;
+    form->center_x = radius;
+    form->center_y = radius;
+    form->pattern = (uint8_t *)malloc(form->width*form->height);
+    memset(form->pattern, 0xFF, (2*radius + 1)*(2*radius + 1));
+}
+
+void createCircle(uint8_t radius, geometric_form *form)
+{
+    /* First allocate space to create the pattern */
+    form->width = 2*radius + 1;
+    form->height = 2*radius + 1;
+    form->center_x = radius;
+    form->center_y = radius;
+    form->pattern = (uint8_t *)malloc(form->width*form->height);
+    memset(form->pattern, 0, (2*radius + 1)*(2*radius + 1));
+    
+    /* Now calculate the form */
+    for(uint8_t y = 0; y < form->height; y++)
+    {
+        for(uint8_t x = 0; x < form->width; x++)
+        {
+            /* center of this form is (radius, radius) */
+            /* Calculate the distance from the radius    */
+            float dist = pow(((float)x) - ((float)radius), 2);
+            dist += pow(((float)y) - ((float)radius), 2);
+            dist = sqrt(dist);
+            if(dist <= ((float)radius))
+            {
+                form->pattern[y*form->width + x] = 0xFF;
+            }
+        }
+    }
+}
+
+void addGeometricForm(uint8_t *pixels, uint16_t width, uint16_t height, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, geometric_form *form)
+{
+    int32_t start_x = x - ((int)(form->width/2));
+    int32_t start_y = y - ((int)(form->height/2));
+    int32_t pos_x, pos_y;
+    for(uint8_t step_y = 0; step_y < form->height; step_y++)
+    {
+        pos_y = start_y + step_y;
+        if ((pos_y >= 0) && (pos_y < height))
+        {
+            for(uint8_t step_x = 0; step_x < form->width; step_x++) 
+            {
+                pos_x = start_x + step_x;
+                if (form->pattern[step_y*form->width + step_x])
+                {
+                    if ((pos_x >= 0) && (pos_x < width))
+                    {
+                        pixels[(width*4*pos_y) + pos_x*4 + 0] = b;
+                        pixels[(width*4*pos_y) + pos_x*4 + 1] = g;
+                        pixels[(width*4*pos_y) + pos_x*4 + 2] = r;
+                        pixels[(width*4*pos_y) + pos_x*4 + 3] = SDL_ALPHA_OPAQUE;
+                    }
+                }
+            }
+        }
+    }
+}
 
 /*This function converts a color described in the HSV format to RGB format*/
 rgb hsv2rgb(hsv in)
@@ -136,11 +241,73 @@ double getRandom(double mu, double sigma, double min, double max)
     return z0;
 }
 
-#define READ_SIZE   6
-#define N_PATTERNS  15
+#define READ_SIZE       6
+#define N_PATTERNS      15
+
+#define MULTIPLE_GEOMETRIES     0
+#define MULTIPLE_SIZES          0
+
+
+
+
+
+
+
+
+
+#define N_GEOMETRIES    3
+#define N_SIZES         5
+
+#if (MULTIPLE_GEOMETRIES*MULTIPLE_SIZES)
+#define N_FORMS         (N_GEOMETRIES*N_SIZES)
+#elif MULTIPLE_GEOMETRIES
+#define N_FORMS         N_GEOMETRIES
+#elif MULTIPLE_SIZES
+#define N_FORMS         N_SIZES
+#else
+#define N_FORMS         1
+#endif
+
+
 int main( int argc, char** argv )
 {
     srand(time(NULL));
+
+    geometric_form forms[N_FORMS];
+#if (MULTIPLE_GEOMETRIES*MULTIPLE_SIZES)
+    createTriangle(1,  &forms[0]);
+    createTriangle(3,  &forms[1]);
+    createTriangle(5,  &forms[2]);
+    createTriangle(7,  &forms[3]);
+    createTriangle(10, &forms[4]);
+    createSquare(1,  &forms[5]);
+    createSquare(3,  &forms[6]);
+    createSquare(5,  &forms[7]);
+    createSquare(7,  &forms[8]);
+    createSquare(10, &forms[9]);
+    createCircle(1,  &forms[10]);
+    createCircle(3,  &forms[11]);
+    createCircle(5,  &forms[12]);
+    createCircle(7,  &forms[13]);
+    createCircle(10, &forms[14]);
+#elif MULTIPLE_GEOMETRIES
+    createTriangle(3,  &forms[0]);
+    createSquare(3,  &forms[1]);
+    createCircle(3,  &forms[2]);
+#elif MULTIPLE_SIZES
+    createCircle(1,  &forms[0]);
+    createCircle(3,  &forms[1]);
+    createCircle(5,  &forms[2]);
+    createCircle(7,  &forms[3]);
+    createCircle(10, &forms[4]);
+#else
+    createCircle(3,  &forms[0]);
+#endif
+
+    for(uint8_t i = 0; i < N_FORMS; i++)
+    {
+        testForm(&forms[i]);
+    }
 
     /* Allocate all the pattern buffers and place them in the desired order */
     /* color buffers are for the hue value of HSV (ranging from 0 to 360)*/
@@ -353,6 +520,7 @@ int main( int argc, char** argv )
             pixels[PIXELS_PER_RUN*cntr + i].r = (int)(rgb_val.r*255);
             pixels[PIXELS_PER_RUN*cntr + i].x = x;
             pixels[PIXELS_PER_RUN*cntr + i].y = y;
+            pixels[PIXELS_PER_RUN*cntr + i].format = rand()%N_FORMS;
         }
 
         /*Clear the final buffer*/
@@ -366,10 +534,11 @@ int main( int argc, char** argv )
                 const uint16_t y = pixels[PIXELS_PER_RUN*sub_cntr + i].y;
                 if ((x < WIDTH) && (y < HEIGHT))
                 {
-                    final_pixels[(WIDTH*4*y) + x*4 + 0] = pixels[PIXELS_PER_RUN*sub_cntr + i].b;
-                    final_pixels[(WIDTH*4*y) + x*4 + 1] = pixels[PIXELS_PER_RUN*sub_cntr + i].g;
-                    final_pixels[(WIDTH*4*y) + x*4 + 2] = pixels[PIXELS_PER_RUN*sub_cntr + i].r;
-                    final_pixels[(WIDTH*4*y) + x*4 + 3] = SDL_ALPHA_OPAQUE;
+                    //final_pixels[(WIDTH*4*y) + x*4 + 0] = pixels[PIXELS_PER_RUN*sub_cntr + i].b;
+                    //final_pixels[(WIDTH*4*y) + x*4 + 1] = pixels[PIXELS_PER_RUN*sub_cntr + i].g;
+                    //final_pixels[(WIDTH*4*y) + x*4 + 2] = pixels[PIXELS_PER_RUN*sub_cntr + i].r;
+                    //final_pixels[(WIDTH*4*y) + x*4 + 3] = SDL_ALPHA_OPAQUE;
+                    addGeometricForm(final_pixels, WIDTH, HEIGHT, x, y, pixels[PIXELS_PER_RUN*sub_cntr + i].r, pixels[PIXELS_PER_RUN*sub_cntr + i].g, pixels[PIXELS_PER_RUN*sub_cntr + i].b, &forms[pixels[PIXELS_PER_RUN*sub_cntr + i].format]);
                 }
             }
         }
