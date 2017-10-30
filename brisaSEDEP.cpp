@@ -16,7 +16,11 @@ using namespace std;
 #define SIZE_PIXELS     (WIDTH*HEIGHT*4)
 #define PIXELS_PER_RUN  250
 
-#define GLOBAL_SIGMA    0
+#define SMOOTH_TRANSITION   0
+
+#define TIME_DEBUG          0
+
+#define GLOBAL_SIGMA        0
 
 typedef struct {
     double r;       // a fraction between 0 and 1
@@ -118,27 +122,25 @@ void createCircle(uint8_t radius, geometric_form *form)
     }
 }
 
-void addGeometricForm(uint8_t *pixels, uint16_t width, uint16_t height, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, geometric_form *form)
+void addGeometricForm(uint8_t *pixels, uint16_t width, uint16_t height, pixel *px, geometric_form *form)
 {
-    int32_t start_x = x - ((int)(form->width/2));
-    int32_t start_y = y - ((int)(form->height/2));
-    int32_t pos_x, pos_y;
-    for(uint8_t step_y = 0; step_y < form->height; step_y++)
+    int32_t start_x = px->x - form->center_x;
+    int32_t start_y = px->y - form->center_y;
+    int32_t pos_x, pos_y, step_y, step_x;
+    uint8_t color[4] = {px->b, px->g, px->r, SDL_ALPHA_OPAQUE};
+    for(step_y = 0; step_y < form->height; step_y++)
     {
         pos_y = start_y + step_y;
         if ((pos_y >= 0) && (pos_y < height))
         {
-            for(uint8_t step_x = 0; step_x < form->width; step_x++) 
+            for(step_x = 0; step_x < form->width; step_x++) 
             {
                 pos_x = start_x + step_x;
                 if (form->pattern[step_y*form->width + step_x])
                 {
                     if ((pos_x >= 0) && (pos_x < width))
                     {
-                        pixels[(width*4*pos_y) + pos_x*4 + 0] = b;
-                        pixels[(width*4*pos_y) + pos_x*4 + 1] = g;
-                        pixels[(width*4*pos_y) + pos_x*4 + 2] = r;
-                        pixels[(width*4*pos_y) + pos_x*4 + 3] = SDL_ALPHA_OPAQUE;
+                        memcpy(&pixels[(width*4*pos_y) + pos_x*4], color, 4);
                     }
                 }
             }
@@ -452,6 +454,9 @@ int main( int argc, char** argv )
     {
 
 
+#if TIME_DEBUG
+        const Uint64 start = SDL_GetPerformanceCounter();
+#endif
         /*Change to the next pattern*/
         if (((full_cntr+1)%150) == 0)
         {
@@ -460,13 +465,26 @@ int main( int argc, char** argv )
             {
                 sigma_state = 0;
             }
+#if not SMOOTH_TRANSITION
+            for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
+            {
+                sigmas[sigma_cntr] = full_sigmas[sigma_state][sigma_cntr]; 
+                color[sigma_cntr*3 + 0] = full_color[sigma_state][sigma_cntr*3 + 0];
+            }
+#endif
         }
+#if SMOOTH_TRANSITION
         /*This creates a soft pattern change, by applying the pattern slowly on top of the old one*/
         for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
         {
             sigmas[sigma_cntr] = sigmas[sigma_cntr]*0.9 + full_sigmas[sigma_state][sigma_cntr]*0.1; 
             color[sigma_cntr*3 + 0] = color[sigma_cntr*3 + 0]*0.9 + full_color[sigma_state][sigma_cntr*3 + 0]*0.1;
         }
+#endif        
+
+#if TIME_DEBUG
+        const Uint64 pos1 = SDL_GetPerformanceCounter();
+#endif
 
          /*Jump through the N_BUFFERS*/
         if (cntr >= N_BUFFERS)
@@ -480,6 +498,10 @@ int main( int argc, char** argv )
         SDL_SetRenderDrawColor( renderer, 0, 0, 0, SDL_ALPHA_OPAQUE );
         SDL_RenderClear( renderer );
 
+
+#if TIME_DEBUG
+        const Uint64 pos2 = SDL_GetPerformanceCounter();
+#endif
         /*Poll for esc key*/
         while( SDL_PollEvent( &event ) )
         {
@@ -496,7 +518,6 @@ int main( int argc, char** argv )
         rgb rgb_val;
         hsv_val.s = 1.0;
         hsv_val.v = 1.0;
-        cout << sigma_state << "; " << full_cntr << "                                     \r";
 #if GLOBAL_SIGMA
         double sigma = pow(2,abs((double)full_cntr - 1000.0)/100);
 #endif  
@@ -514,7 +535,7 @@ int main( int argc, char** argv )
             hsv_val.h = getRandom(color[3*(y*WIDTH + x) + 0],sigma,0,360); 
             rgb_val = hsv2rgb(hsv_val);
 
-            /*Store the value in the buuffer*/
+            /*Store the value in the buffer*/
             pixels[PIXELS_PER_RUN*cntr + i].b = (int)(rgb_val.b*255);
             pixels[PIXELS_PER_RUN*cntr + i].g = (int)(rgb_val.g*255);       
             pixels[PIXELS_PER_RUN*cntr + i].r = (int)(rgb_val.r*255);
@@ -523,6 +544,10 @@ int main( int argc, char** argv )
             pixels[PIXELS_PER_RUN*cntr + i].format = rand()%N_FORMS;
         }
 
+#if TIME_DEBUG
+        const Uint64 pos3 = SDL_GetPerformanceCounter();
+#endif
+
         /*Clear the final buffer*/
         memset(final_pixels, 0, SIZE_PIXELS);
         /*Fill final_pixels with the pixels described at each buffer*/
@@ -530,18 +555,14 @@ int main( int argc, char** argv )
         {
             for (uint16_t i = 0; i <  PIXELS_PER_RUN; i++)
             {
-                const uint16_t x = pixels[PIXELS_PER_RUN*sub_cntr + i].x;
-                const uint16_t y = pixels[PIXELS_PER_RUN*sub_cntr + i].y;
-                if ((x < WIDTH) && (y < HEIGHT))
-                {
-                    //final_pixels[(WIDTH*4*y) + x*4 + 0] = pixels[PIXELS_PER_RUN*sub_cntr + i].b;
-                    //final_pixels[(WIDTH*4*y) + x*4 + 1] = pixels[PIXELS_PER_RUN*sub_cntr + i].g;
-                    //final_pixels[(WIDTH*4*y) + x*4 + 2] = pixels[PIXELS_PER_RUN*sub_cntr + i].r;
-                    //final_pixels[(WIDTH*4*y) + x*4 + 3] = SDL_ALPHA_OPAQUE;
-                    addGeometricForm(final_pixels, WIDTH, HEIGHT, x, y, pixels[PIXELS_PER_RUN*sub_cntr + i].r, pixels[PIXELS_PER_RUN*sub_cntr + i].g, pixels[PIXELS_PER_RUN*sub_cntr + i].b, &forms[pixels[PIXELS_PER_RUN*sub_cntr + i].format]);
-                }
+                pixel px = pixels[PIXELS_PER_RUN*sub_cntr + i];
+                addGeometricForm(final_pixels, WIDTH, HEIGHT, &px, &forms[px.format]);
             }
         }
+
+#if TIME_DEBUG
+        const Uint64 pos4 = SDL_GetPerformanceCounter();
+#endif
 
         /*Update and render the screen*/
         SDL_UpdateTexture
@@ -554,6 +575,17 @@ int main( int argc, char** argv )
         SDL_RenderCopy( renderer, texture, NULL, NULL );
         SDL_RenderPresent( renderer );
 
+#if TIME_DEBUG
+        const Uint64 end = SDL_GetPerformanceCounter();
+        const static Uint64 freq = SDL_GetPerformanceFrequency();
+        const double seconds1 = ( pos1 - start ) / static_cast< double >( freq );
+        const double seconds2 = ( pos2 - pos1 ) / static_cast< double >( freq );
+        const double seconds3 = ( pos3 - pos2 ) / static_cast< double >( freq );
+        const double seconds4 = ( pos4 - pos3 ) / static_cast< double >( freq );
+        const double seconds5 = ( end - pos4 ) / static_cast< double >( freq );
+        const double seconds = ( end - start ) / static_cast< double >( freq );
+        cout << "\rFrame time: " << seconds1*1000.0 << "|" << seconds2*1000.0 << "|" << seconds3*1000.0 << "|" << seconds4*1000.0 << "|" << seconds5*1000.0 << "|" << seconds * 1000.0 << "ms           ";
+#endif
         cntr += 1;
         full_cntr += 1;
     }
