@@ -10,17 +10,41 @@
 
 using namespace std;
 
-#define WIDTH           1920
-#define HEIGHT          1080 
-#define N_BUFFERS       100
+//#define WIDTH           656
+#define WIDTH           1280
+//#define HEIGHT          416 
+#define HEIGHT          1024
+#define N_BUFFERS       50
 #define SIZE_PIXELS     (WIDTH*HEIGHT*4)
-#define PIXELS_PER_RUN  250
+#define PIXELS_PER_RUN  1000
 
 #define SMOOTH_TRANSITION   0
 
-#define TIME_DEBUG          0
+#define TIME_DEBUG          1
 
 #define GLOBAL_SIGMA        0
+
+
+#define READ_SIZE       6
+#define N_PATTERNS      15
+
+#define MULTIPLE_GEOMETRIES     1
+#define MULTIPLE_SIZES          0
+
+#define N_GEOMETRIES    3
+#define N_SIZES         5
+
+#if (MULTIPLE_GEOMETRIES*MULTIPLE_SIZES)
+#define N_FORMS         (N_GEOMETRIES*N_SIZES)
+#elif MULTIPLE_GEOMETRIES
+#define N_FORMS         N_GEOMETRIES
+#elif MULTIPLE_SIZES
+#define N_FORMS         N_SIZES
+#else
+#define N_FORMS         1
+#endif
+
+
 
 typedef struct {
     double r;       // a fraction between 0 and 1
@@ -35,6 +59,7 @@ typedef struct {
     uint8_t format;
     uint16_t x;
     uint16_t y;
+    uint8_t active;
 } pixel;
 
 typedef struct {
@@ -243,38 +268,21 @@ double getRandom(double mu, double sigma, double min, double max)
     return z0;
 }
 
-#define READ_SIZE       6
-#define N_PATTERNS      15
-
-#define MULTIPLE_GEOMETRIES     0
-#define MULTIPLE_SIZES          0
-
-
-
-
-
-
-
-
-
-#define N_GEOMETRIES    3
-#define N_SIZES         5
-
-#if (MULTIPLE_GEOMETRIES*MULTIPLE_SIZES)
-#define N_FORMS         (N_GEOMETRIES*N_SIZES)
-#elif MULTIPLE_GEOMETRIES
-#define N_FORMS         N_GEOMETRIES
-#elif MULTIPLE_SIZES
-#define N_FORMS         N_SIZES
-#else
-#define N_FORMS         1
-#endif
-
+uint16_t getPeopleCount()
+{
+    ifstream myfile;
+    myfile.open("counter.bin", ios::binary);
+    char *buff;
+    uint16_t counter;
+    buff = (char*)&counter;
+    myfile.read(buff, 2);
+    myfile.close();
+    return counter;
+}
 
 int main( int argc, char** argv )
 {
     srand(time(NULL));
-
     geometric_form forms[N_FORMS];
 #if (MULTIPLE_GEOMETRIES*MULTIPLE_SIZES)
     createTriangle(1,  &forms[0]);
@@ -315,11 +323,11 @@ int main( int argc, char** argv )
     /* color buffers are for the hue value of HSV (ranging from 0 to 360)*/
     /* sigma buffers are for the standard deviation, they are double */
     uint16_t *full_color[N_PATTERNS];
-    uint16_t *color = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *color_flag_1 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *color_flag_2 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *color_flag_3 = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
-    uint16_t *color_amudi = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+    uint16_t *color = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
+    uint16_t *color_flag_1 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
+    uint16_t *color_flag_2 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
+    uint16_t *color_flag_3 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
+    uint16_t *color_amudi = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
     double *full_sigmas[N_PATTERNS];
     double *sigmas = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
     double *sigmas_amudi = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
@@ -356,6 +364,16 @@ int main( int argc, char** argv )
     full_sigmas[13] = sigmas_amudi;
     full_sigmas[14] = sigmas_flag;
 
+    /* Check All sigmas and colors */
+    for (uint8_t i = 0; i < N_PATTERNS; i++)
+    {
+        if ((full_color[i] == NULL) || (full_sigmas == NULL))
+        {
+            cout << "Problems allocating patterns" << endl;
+            return -1;
+        }
+    }
+
     /*Read file to load a pattern
       this file is generatad by running the scripts createImage.py  parseImages.py*/
     ifstream myfile;
@@ -377,9 +395,7 @@ int main( int argc, char** argv )
             uint8_t temp = ((uint8_t *)&hue)[0];
             ((uint8_t *)&hue)[0] = ((uint8_t *)&hue)[1];
             ((uint8_t *)&hue)[1] = temp;
-            color[3*readcntr + 0] = hue;
-            color[3*readcntr + 1] = 1;
-            color[3*readcntr + 2] = 1;
+            color[readcntr] = hue;
             sigmas_amudi[readcntr] = std;
 
         }
@@ -390,9 +406,9 @@ int main( int argc, char** argv )
     {
         for(uint16_t x = 0; x < WIDTH; x++)
         {
-            color_flag_1[3*(y*WIDTH + x) + 0] = 360*(((double)x)/WIDTH); 
-            color_flag_2[3*(y*WIDTH + x) + 0] = ((int)(360*(((double)x)/WIDTH)) + 50)%360; 
-            color_flag_3[3*(y*WIDTH + x) + 0] = ((int)(360*(((double)x)/WIDTH)) + 100)%360; 
+            color_flag_1[(y*WIDTH + x)] = 360*(((double)x)/WIDTH); 
+            color_flag_2[(y*WIDTH + x)] = ((int)(360*(((double)x)/WIDTH)) + 50)%360; 
+            color_flag_3[(y*WIDTH + x)] = ((int)(360*(((double)x)/WIDTH)) + 100)%360; 
             sigmas_flag[y*WIDTH + x] = 5;//pow(2,10*(((double)x)/WIDTH));
             sigmas_base[y*WIDTH + x] = 10000;
         }
@@ -431,11 +447,23 @@ int main( int argc, char** argv )
 
     /*pixels will hold all the N_BUFFERS of pixel to draw*/
     pixel *pixels = (pixel*)malloc(PIXELS_PER_RUN*sizeof(pixel)*N_BUFFERS);
-    memset(pixels, 0, PIXELS_PER_RUN*sizeof(pixel)*N_BUFFERS);
+    if (pixels == NULL)
+    {
+        cout << "Problems allocationg pixel" << endl;
+        return -1;
+    }
+
 
     /*final_pixels are the actually 1920x1080 pixel description*/
     uint8_t *final_pixels = (uint8_t*)malloc(SIZE_PIXELS);
+    if (final_pixels == NULL)
+    {
+        cout << "Problems allocationg final pixel" << endl;
+        return -1;
+    }
+
     memset(final_pixels, 0, SIZE_PIXELS);
+    memset(pixels, 0, PIXELS_PER_RUN*sizeof(pixel)*N_BUFFERS);
 
   
     bool running = true;
@@ -447,7 +475,7 @@ int main( int argc, char** argv )
     for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
     {
         sigmas[sigma_cntr] = full_sigmas[sigma_state][sigma_cntr]; 
-        color[sigma_cntr*3 + 0] = full_color[sigma_state][sigma_cntr*3 + 0]; 
+        color[sigma_cntr] = full_color[sigma_state][sigma_cntr]; 
     }
 
     while( running )
@@ -456,6 +484,7 @@ int main( int argc, char** argv )
 
 #if TIME_DEBUG
         const Uint64 start = SDL_GetPerformanceCounter();
+        cout << "pos_start" << endl;
 #endif
         /*Change to the next pattern*/
         if (((full_cntr+1)%150) == 0)
@@ -469,7 +498,7 @@ int main( int argc, char** argv )
             for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
             {
                 sigmas[sigma_cntr] = full_sigmas[sigma_state][sigma_cntr]; 
-                color[sigma_cntr*3 + 0] = full_color[sigma_state][sigma_cntr*3 + 0];
+                color[sigma_cntr] = full_color[sigma_state][sigma_cntr];
             }
 #endif
         }
@@ -478,12 +507,13 @@ int main( int argc, char** argv )
         for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
         {
             sigmas[sigma_cntr] = sigmas[sigma_cntr]*0.9 + full_sigmas[sigma_state][sigma_cntr]*0.1; 
-            color[sigma_cntr*3 + 0] = color[sigma_cntr*3 + 0]*0.9 + full_color[sigma_state][sigma_cntr*3 + 0]*0.1;
+            color[sigma_cntr] = color[sigma_cntr]*0.9 + full_color[sigma_state][sigma_cntr]*0.1;
         }
 #endif        
 
 #if TIME_DEBUG
         const Uint64 pos1 = SDL_GetPerformanceCounter();
+        cout << "pos1" << endl;
 #endif
 
          /*Jump through the N_BUFFERS*/
@@ -491,8 +521,6 @@ int main( int argc, char** argv )
         {
             cntr = 0;
         }       
-        /*Clear the buffer for this run*/
-        memset(&pixels[cntr*PIXELS_PER_RUN*sizeof(pixel)], 0, PIXELS_PER_RUN*sizeof(pixels));
 
         /*Place SDL background*/
         SDL_SetRenderDrawColor( renderer, 0, 0, 0, SDL_ALPHA_OPAQUE );
@@ -501,6 +529,7 @@ int main( int argc, char** argv )
 
 #if TIME_DEBUG
         const Uint64 pos2 = SDL_GetPerformanceCounter();
+        cout << "pos2" << endl;
 #endif
         /*Poll for esc key*/
         while( SDL_PollEvent( &event ) )
@@ -521,7 +550,12 @@ int main( int argc, char** argv )
 #if GLOBAL_SIGMA
         double sigma = pow(2,abs((double)full_cntr - 1000.0)/100);
 #endif  
-        for( unsigned int i = 0; i < PIXELS_PER_RUN; i++ )
+        uint16_t count = getPeopleCount();
+        if (count > PIXELS_PER_RUN)
+        {
+            count = PIXELS_PER_RUN;
+        }
+        for( unsigned int i = 0; i < count; i++ )
         {
             /*Get a random position within the image*/
             const unsigned int x = rand() % WIDTH;
@@ -532,7 +566,7 @@ int main( int argc, char** argv )
             double sigma = sigmas[y*WIDTH + x]; 
 #endif
             /*Get a random hue value and convert it to rgb*/
-            hsv_val.h = getRandom(color[3*(y*WIDTH + x) + 0],sigma,0,360); 
+            hsv_val.h = getRandom(color[(y*WIDTH + x)],sigma,0,360); 
             rgb_val = hsv2rgb(hsv_val);
 
             /*Store the value in the buffer*/
@@ -542,10 +576,16 @@ int main( int argc, char** argv )
             pixels[PIXELS_PER_RUN*cntr + i].x = x;
             pixels[PIXELS_PER_RUN*cntr + i].y = y;
             pixels[PIXELS_PER_RUN*cntr + i].format = rand()%N_FORMS;
+            pixels[PIXELS_PER_RUN*cntr + i].active = 1;
+        }
+        for (uint16_t i = count; i < PIXELS_PER_RUN; i++)
+        {
+            pixels[PIXELS_PER_RUN*cntr + i].active = 0;
         }
 
 #if TIME_DEBUG
         const Uint64 pos3 = SDL_GetPerformanceCounter();
+        cout << "pos3" << endl;
 #endif
 
         /*Clear the final buffer*/
@@ -555,13 +595,19 @@ int main( int argc, char** argv )
         {
             for (uint16_t i = 0; i <  PIXELS_PER_RUN; i++)
             {
-                pixel px = pixels[PIXELS_PER_RUN*sub_cntr + i];
-                addGeometricForm(final_pixels, WIDTH, HEIGHT, &px, &forms[px.format]);
+                pixel px = pixels[PIXELS_PER_RUN*((sub_cntr + cntr + 1)%N_BUFFERS) + i];
+                if (px.active)
+                    addGeometricForm(final_pixels, WIDTH, HEIGHT, &px, &forms[px.format]);
+                else
+                    break;
+
             }
         }
+        cout << endl;
 
 #if TIME_DEBUG
         const Uint64 pos4 = SDL_GetPerformanceCounter();
+        cout << "pos4" << endl;
 #endif
 
         /*Update and render the screen*/
@@ -584,7 +630,7 @@ int main( int argc, char** argv )
         const double seconds4 = ( pos4 - pos3 ) / static_cast< double >( freq );
         const double seconds5 = ( end - pos4 ) / static_cast< double >( freq );
         const double seconds = ( end - start ) / static_cast< double >( freq );
-        cout << "\rFrame time: " << seconds1*1000.0 << "|" << seconds2*1000.0 << "|" << seconds3*1000.0 << "|" << seconds4*1000.0 << "|" << seconds5*1000.0 << "|" << seconds * 1000.0 << "ms           ";
+        cout << "\rFrame time: " << seconds1*1000.0 << "|" << seconds2*1000.0 << "|" << seconds3*1000.0 << "|" << seconds4*1000.0 << "|" << seconds5*1000.0 << "|" << seconds * 1000.0 << "ms           " << endl;
 #endif
         cntr += 1;
         full_cntr += 1;
