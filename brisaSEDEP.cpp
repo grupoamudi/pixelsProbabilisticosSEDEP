@@ -260,8 +260,8 @@ rgb hsv2rgb(hsv in)
 double getRandom(double mu, double sigma, double min, double max)
 {
     static const double epsilon = std::numeric_limits<double>::min();
-    thread_local double z1;
-	thread_local bool generate;
+    static double z1;
+	static bool generate;
 	generate = !generate;
     z1 = z1 * sigma + mu;
 	if ((!generate)) 
