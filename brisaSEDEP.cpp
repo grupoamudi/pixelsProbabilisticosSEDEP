@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_render.h>
+#include <SDL2/SDL_ttf.h>
 #include <iostream>
 #include <vector>
 #include <time.h>
@@ -9,24 +10,32 @@
 #include <fstream>
 
 using namespace std;
+#define RASP_MODE       1
 
-//#define WIDTH           656
-#define WIDTH           1280
-//#define HEIGHT          416 
-#define HEIGHT          1024
-#define N_BUFFERS       50
+#if RASP_MODE
+    #define WIDTH           656
+    #define HEIGHT          416 
+    #define N_BUFFERS       50
+    #define PIXELS_PER_RUN  200
+#else
+    #define WIDTH           1280
+    #define HEIGHT          1024
+    #define N_BUFFERS       50
+    #define PIXELS_PER_RUN  1000
+#endif
+
 #define SIZE_PIXELS     (WIDTH*HEIGHT*4)
-#define PIXELS_PER_RUN  1000
-
 #define SMOOTH_TRANSITION   0
 
-#define TIME_DEBUG          1
+#define TIME_DEBUG          0
 
 #define GLOBAL_SIGMA        0
 
+#define CHANGE_N        4000
+#define TRANSITION_N    250
 
 #define READ_SIZE       6
-#define N_PATTERNS      15
+#define N_PATTERNS      10
 
 #define MULTIPLE_GEOMETRIES     1
 #define MULTIPLE_SIZES          0
@@ -43,8 +52,6 @@ using namespace std;
 #else
 #define N_FORMS         1
 #endif
-
-
 
 typedef struct {
     double r;       // a fraction between 0 and 1
@@ -68,6 +75,18 @@ typedef struct {
     double v;       // a fraction between 0 and 1
 } hsv;
 
+/*defined this strcut this way, because it refers to itself*/
+typedef struct pattern {
+    double      *std;
+    uint16_t    *color;
+    /*If next_pattern is NULL the next one will be random*/
+    pattern     *next_pattern;
+    /*If not is_first that means that this pattern can't be the called from a random change*/
+    uint8_t     is_first;
+    uint16_t    duration;
+    uint16_t    transition;
+} pattern;
+
 typedef struct {
     uint8_t width;
     uint8_t height;
@@ -89,6 +108,7 @@ void testForm(geometric_form *form)
         }
         cout << "\n";
     }
+    cout << "\n";
 }
 
 void createTriangle(uint8_t radius, geometric_form *form)
@@ -268,6 +288,22 @@ double getRandom(double mu, double sigma, double min, double max)
     return z0;
 }
 
+double getPeopleCount(double a, double b, uint16_t counter)
+{
+    double porc;
+    porc = counter*a +b;
+    if (porc > 100)
+    {
+        porc = 100;
+    }
+    else if (porc < 0)
+    {
+        porc = 0;
+    }
+
+    return porc/100;
+}
+
 uint16_t getPeopleCount()
 {
     ifstream myfile;
@@ -277,7 +313,115 @@ uint16_t getPeopleCount()
     buff = (char*)&counter;
     myfile.read(buff, 2);
     myfile.close();
+
     return counter;
+}
+
+double getPeopleCount(double a, double b)
+{
+    return getPeopleCount(a, b, getPeopleCount());
+}
+
+
+int get_file_size(std::string filename) // path to file
+{
+    FILE *p_file = NULL;
+    p_file = fopen(filename.c_str(),"rb");
+    fseek(p_file,0,SEEK_END);
+    int size = ftell(p_file);
+    fclose(p_file);
+    return size;
+}
+
+void create_flag(uint16_t *color_list, uint8_t color_len, uint16_t *colors)
+{
+    uint16_t color_lines = HEIGHT/color_len;
+    for(uint16_t y = 0; y < HEIGHT; y++)
+    {
+        for(uint16_t x = 0; x < WIDTH; x++)
+        {
+            uint8_t color_pos = y/color_lines;
+            if (color_pos >= color_len)
+            {
+                color_pos = color_len - 1;
+            }
+            colors[(y*WIDTH + x)*3 + 0] = color_list[color_pos*3 + 0];
+            colors[(y*WIDTH + x)*3 + 1] = color_list[color_pos*3 + 1];
+            colors[(y*WIDTH + x)*3 + 2] = color_list[color_pos*3 + 2];
+        }
+    }
+}
+
+void create_rainbow(uint16_t *color, uint16_t offset)
+{
+    for (uint16_t y = 0; y < HEIGHT; y++)
+    {
+        for(uint16_t x = 0; x < WIDTH; x++)
+        {
+            color[(y*WIDTH + x)*3 + 0] = ((int)(360*(((double)x)/WIDTH)) + offset)%360; 
+            color[(y*WIDTH + x)*3 + 1] = 100;
+            color[(y*WIDTH + x)*3 + 2] = 100;
+        }
+    }
+
+}
+
+pattern createPattern(double *sigma, uint16_t *color, uint16_t duration, uint16_t transition)
+{
+    pattern pat;
+    pat.std = sigma;
+    pat.color = color;
+    pat.duration = duration;
+    pat.transition = transition;
+    pat.next_pattern = NULL;
+    pat.is_first = 1;
+    return pat;
+}
+
+pattern createPattern(double *sigma, uint16_t *color)
+{
+    return createPattern(sigma, color, CHANGE_N, TRANSITION_N);
+}
+
+void load_std(std::string filename, double *sigmas)
+{
+    /*Read file to load a pattern
+      this file is generatad by running the scripts createImage.py  parseImages.py*/
+    ifstream myfile;
+    myfile.open(filename, ios::out | ios::app | ios::binary);
+    uint16_t nlines, ncols;
+    char *size_buff = (char*)&ncols;
+    myfile.read(size_buff, 2);
+    size_buff = (char*)&nlines;
+    myfile.read(size_buff, 2);
+
+    for(uint32_t readcntr = 0; readcntr < HEIGHT*WIDTH; readcntr++)
+    {
+        sigmas[readcntr] = 5;
+    }
+
+    for(uint16_t nline = 0; nline < nlines; nline++)
+    {
+        for(uint16_t ncol = 0; ncol < ncols; ncol++)
+        {
+            char buff[6];
+            myfile.read(buff, 6);
+
+            uint32_t std;
+            uint16_t hue;
+            memcpy(&std, &buff[0], 4);
+            if (std > 100000)
+            {
+                std = 100000;
+            }
+            memcpy(&hue, &buff[4], 2);
+            uint8_t temp = ((uint8_t *)&hue)[0];
+            ((uint8_t *)&hue)[0] = ((uint8_t *)&hue)[1];
+            ((uint8_t *)&hue)[1] = temp;
+            sigmas[nline*WIDTH + ncol] = std;
+        }
+    }
+    myfile.close();
 }
 
 int main( int argc, char** argv )
@@ -322,100 +466,129 @@ int main( int argc, char** argv )
     /* Allocate all the pattern buffers and place them in the desired order */
     /* color buffers are for the hue value of HSV (ranging from 0 to 360)*/
     /* sigma buffers are for the standard deviation, they are double */
-    uint16_t *full_color[N_PATTERNS];
-    uint16_t *color = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
-    uint16_t *color_flag_1 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
-    uint16_t *color_flag_2 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
-    uint16_t *color_flag_3 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
+
+    uint16_t *color = (uint16_t*)malloc(WIDTH*HEIGHT*3*sizeof(uint16_t));
+
+
+    uint16_t *color_rainbow_1 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t *color_rainbow_2 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t *color_rainbow_3 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    create_rainbow(color_rainbow_1, 0);
+    create_rainbow(color_rainbow_2, 50);
+    create_rainbow(color_rainbow_3, 100);
+    
+    uint16_t *color_flag_gay = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t color_list_gay[] = {\
+        359, 85, 74,\
+          6, 83, 94,\
+         51,100,100,\
+        141, 78, 51,\
+        226, 64, 64,\
+        294, 69, 54
+    };
+    create_flag(color_list_gay, 6, color_flag_gay);
+
+    uint16_t *color_flag_bi = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t color_list_bi[] = {\
+        332, 89, 85,\
+        332, 89, 85,\
+        269, 45, 58,\
+        224, 79, 61,\
+        224, 79, 61\
+    };
+    create_flag(color_list_bi, 5, color_flag_bi);
+
+    uint16_t *color_flag_trans = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t color_list_trans[] = {\
+        197, 60, 97,\
+        347, 33, 97,\
+        180,  1,100,\
+        347, 33, 97,\
+        197, 60, 97\
+    };
+    create_flag(color_list_trans, 5, color_flag_trans);
+
     uint16_t *color_amudi = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
     double *full_sigmas[N_PATTERNS];
     double *sigmas = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
+    
     double *sigmas_amudi = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
+    load_std("aMuDi.res", sigmas_amudi);
+
+    double *sigmas_amudimon = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
+    load_std("fullamudi.res", sigmas_amudimon);
+
+    double *sigmas_sedep = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
+    load_std("SEDEP.res", sigmas_sedep);
+
     double *sigmas_flag = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
     double *sigmas_base = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
-    full_color[0] = color_flag_1;
-    full_color[1] = color_flag_2;
-    full_color[2] = color_flag_3;
-    full_color[3] = color_flag_2;
-    full_color[4] = color_flag_1;
-    full_color[5] = color_flag_2;
-    full_color[6] = color_flag_3;
-    full_color[7] = color_flag_2;
-    full_color[8] = color_flag_1;
-    full_color[9] = color_flag_2;
-    full_color[10] = color_flag_3;
-    full_color[11] = color_flag_2;
-    full_color[12] = color_flag_1;
-    full_color[13] = color_flag_2;
-    full_color[14] = color_flag_3;
-    full_sigmas[0] = sigmas_base;
-    full_sigmas[1] = sigmas_flag;
-    full_sigmas[2] = sigmas_flag;
-    full_sigmas[3] = sigmas_flag;
-    full_sigmas[4] = sigmas_flag;
-    full_sigmas[5] = sigmas_flag;
-    full_sigmas[6] = sigmas_amudi;
-    full_sigmas[7] = sigmas_base;
-    full_sigmas[8] = sigmas_flag;
-    full_sigmas[9] = sigmas_amudi;
-    full_sigmas[10] = sigmas_flag;
-    full_sigmas[11] = sigmas_flag;
-    full_sigmas[12] = sigmas_base;
-    full_sigmas[13] = sigmas_amudi;
-    full_sigmas[14] = sigmas_flag;
+
+    pattern patterns[N_PATTERNS];
+
+    pattern white_noise = createPattern(sigmas_base, color_rainbow_1);
+
+    pattern gay_flag    = createPattern(sigmas_flag, color_flag_gay);
+    pattern bi_flag     = createPattern(sigmas_flag, color_flag_bi);
+    pattern trans_flag  = createPattern(sigmas_flag, color_flag_trans);
+
+    pattern rainbow1_amudi = createPattern(sigmas_amudimon, color_rainbow_1, CHANGE_N/3, 0);
+    pattern rainbow2_amudi = createPattern(sigmas_amudimon, color_rainbow_2, CHANGE_N/3, 0);
+    pattern rainbow3_amudi = createPattern(sigmas_amudimon, color_rainbow_3, CHANGE_N/3, 0);
+
+    rainbow1_amudi.next_pattern = &rainbow2_amudi;
+    rainbow2_amudi.next_pattern = &rainbow3_amudi;
+    rainbow2_amudi.is_first = 0;
+    rainbow3_amudi.is_first = 0;
+
+    pattern rainbow1_SEDEP = createPattern(sigmas_sedep, color_rainbow_1, CHANGE_N/3, 0);
+    pattern rainbow2_SEDEP = createPattern(sigmas_sedep, color_rainbow_2, CHANGE_N/3, 0);
+    pattern rainbow3_SEDEP = createPattern(sigmas_sedep, color_rainbow_3, CHANGE_N/3, 0);
+
+    rainbow1_SEDEP.next_pattern = &rainbow2_SEDEP;
+    rainbow2_SEDEP.next_pattern = &rainbow3_SEDEP;
+    rainbow2_SEDEP.is_first = 0;
+    rainbow3_SEDEP.is_first = 0;
+
+    patterns[0]  = white_noise;
+    patterns[1]  = trans_flag;
+    patterns[2]  = gay_flag;
+    patterns[3]  = bi_flag;
+    patterns[4]  = rainbow1_amudi;
+    patterns[5]  = rainbow2_amudi;
+    patterns[6]  = rainbow3_amudi;
+    patterns[7]  = rainbow1_SEDEP;
+    patterns[8]  = rainbow2_SEDEP;
+    patterns[9]  = rainbow3_SEDEP;
 
     /* Check All sigmas and colors */
     for (uint8_t i = 0; i < N_PATTERNS; i++)
     {
-        if ((full_color[i] == NULL) || (full_sigmas == NULL))
+        if ((patterns[i].std == NULL) || (patterns[i].color == NULL))
         {
             cout << "Problems allocating patterns" << endl;
             return -1;
         }
     }
 
-    /*Read file to load a pattern
-      this file is generatad by running the scripts createImage.py  parseImages.py*/
-    ifstream myfile;
-    myfile.open("test.res", ios::out | ios::app | ios::binary);
-    for(uint32_t readcntr = 0; readcntr < WIDTH*HEIGHT; readcntr++)
-    {
-        char buff[READ_SIZE];
-        myfile.read(buff, READ_SIZE);
-        for(uint16_t i = 0; i < READ_SIZE; i+=6)
-        {
-            uint32_t std;
-            uint16_t hue;
-            memcpy(&std, &buff[i], 4);
-            if (std > 100000)
-            {
-                std = 100000;
-            }
-            memcpy(&hue, &buff[i+4], 2);
-            uint8_t temp = ((uint8_t *)&hue)[0];
-            ((uint8_t *)&hue)[0] = ((uint8_t *)&hue)[1];
-            ((uint8_t *)&hue)[1] = temp;
-            color[readcntr] = hue;
-            sigmas_amudi[readcntr] = std;
 
-        }
-    }
-    myfile.close();
+
     /*Create some other patterns*/
     for (uint16_t y = 0; y < HEIGHT; y++)
     {
         for(uint16_t x = 0; x < WIDTH; x++)
         {
-            color_flag_1[(y*WIDTH + x)] = 360*(((double)x)/WIDTH); 
-            color_flag_2[(y*WIDTH + x)] = ((int)(360*(((double)x)/WIDTH)) + 50)%360; 
-            color_flag_3[(y*WIDTH + x)] = ((int)(360*(((double)x)/WIDTH)) + 100)%360; 
+            color[y*WIDTH + x] = 180;
             sigmas_flag[y*WIDTH + x] = 5;//pow(2,10*(((double)x)/WIDTH));
             sigmas_base[y*WIDTH + x] = 10000;
         }
     }
-
     /*Initialize SDL things*/
     SDL_Init( SDL_INIT_EVERYTHING );
+    TTF_Init();
+
+    TTF_Font* Sans = TTF_OpenFont("DejaVuSansMono.ttf", 60); //this opens a font style and sets a size
+    SDL_Color White = {255, 255, 255};  // this is the color in rgb format, maxing out all would give you the color white, and it will be your text's color
     atexit( SDL_Quit );
 
     SDL_Window* window = SDL_CreateWindow
@@ -469,15 +642,13 @@ int main( int argc, char** argv )
     bool running = true;
     uint16_t cntr = 0;
     uint32_t full_cntr = 0;
-    uint16_t sigma_state = 0;
 
     /*Load the initial pattern*/
-    for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
-    {
-        sigmas[sigma_cntr] = full_sigmas[sigma_state][sigma_cntr]; 
-        color[sigma_cntr] = full_color[sigma_state][sigma_cntr]; 
-    }
-
+    double sigma_effect = 1000;
+    double count_A = 0.5, count_B = 0;
+    uint8_t o_show_type = 0, fake_mode = 0, pause_mode = 0;
+            uint16_t fake_count = 20;
+    pattern *pattern_ptr = &patterns[4];
     while( running )
     {
 
@@ -487,18 +658,29 @@ int main( int argc, char** argv )
         cout << "pos_start" << endl;
 #endif
         /*Change to the next pattern*/
-        if (((full_cntr+1)%150) == 0)
+        if (((full_cntr)%pattern_ptr->duration) == 0)
         {
-            sigma_state += 1;
-            if(sigma_state == N_PATTERNS)
+            sigma_effect = 1000;
+            if (pattern_ptr->next_pattern == NULL)
             {
-                sigma_state = 0;
+                do
+                {
+                    uint16_t sigma_state = rand() % N_PATTERNS;
+                    cout << "sigma_state: " << sigma_state << "\n";
+                    pattern_ptr = &patterns[sigma_state];
+                }while(!pattern_ptr->is_first);
+            }
+            else
+            {
+                pattern_ptr = pattern_ptr->next_pattern;
             }
 #if not SMOOTH_TRANSITION
             for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
             {
-                sigmas[sigma_cntr] = full_sigmas[sigma_state][sigma_cntr]; 
-                color[sigma_cntr] = full_color[sigma_state][sigma_cntr];
+                sigmas[sigma_cntr] = pattern_ptr->std[sigma_cntr]; 
+                color[sigma_cntr*3 + 0]  = pattern_ptr->color[sigma_cntr*3 + 0]; 
+                color[sigma_cntr*3 + 1]  = pattern_ptr->color[sigma_cntr*3 + 1]; 
+                color[sigma_cntr*3 + 2]  = pattern_ptr->color[sigma_cntr*3 + 2]; 
             }
 #endif
         }
@@ -506,8 +688,10 @@ int main( int argc, char** argv )
         /*This creates a soft pattern change, by applying the pattern slowly on top of the old one*/
         for(uint32_t sigma_cntr = 0; sigma_cntr < HEIGHT*WIDTH; sigma_cntr += 1)
         {
-            sigmas[sigma_cntr] = sigmas[sigma_cntr]*0.9 + full_sigmas[sigma_state][sigma_cntr]*0.1; 
-            color[sigma_cntr] = color[sigma_cntr]*0.9 + full_color[sigma_state][sigma_cntr]*0.1;
+            sigmas[sigma_cntr] = sigmas[sigma_cntr]*0.9 + pattern_ptr->std[sigma_cntr]*0.1; 
+            color[sigma_cntr*3 + 0]  = color[sigma_cntr*3 + 0]*0.95  + pattern_ptr->color[sigma_cntr*3 + 0]*0.05;
+            color[sigma_cntr*3 + 1]  = color[sigma_cntr*3 + 1]*0.95  + pattern_ptr->color[sigma_cntr*3 + 1]*0.05;
+            color[sigma_cntr*3 + 2]  = color[sigma_cntr*3 + 2]*0.95  + pattern_ptr->color[sigma_cntr*3 + 2]*0.05;
         }
 #endif        
 
@@ -540,17 +724,109 @@ int main( int argc, char** argv )
                 running = false;
                 break;
             }
+            else if (771 == event.type && 65 == event.key.keysym.scancode )
+            {
+                count_A += 0.01;
+            }
+            else if (771 == event.type && 97 == event.key.keysym.scancode )
+            {
+                count_A -= 0.01;
+                if (count_A < 0)
+                {
+                    count_A = 0;
+                }
+            }
+            else if (771 == event.type && 66 == event.key.keysym.scancode )
+            {
+                count_B += 0.25;
+            }
+            else if (771 == event.type && 98 == event.key.keysym.scancode )
+            {
+                count_B -= 0.25;
+                if (count_B < 0)
+                {
+                    count_B = 0;
+                }
+            }
+            else if (771 == event.type && 111 == event.key.keysym.scancode )
+            {
+                o_show_type += 1;
+            }
+            else if (771 == event.type && 102 == event.key.keysym.scancode )
+            {
+                fake_mode += 1;
+            }
+            else if (771 == event.type && (65451 == event.key.keysym.scancode || 43 == event.key.keysym.scancode))
+            {
+                fake_count += 1;
+            }
+            else if (771 == event.type && (65453 == event.key.keysym.scancode || 45 == event.key.keysym.scancode))
+            {
+                if (fake_count > 0)
+                {
+                    fake_count -= 1;
+                }
+            }
+            else if (771 == event.type && 112 == event.key.keysym.scancode )
+            {
+                pause_mode += 1;
+            }
+            cout << SDL_KEYDOWN << "," << event.type << "," << event.key.keysym.scancode << ", " << count_A << "\n";
         }
+
+        if (pause_mode%2)
+        {
+            /*Clear the final buffer*/
+            memset(final_pixels, 0, SIZE_PIXELS);
+
+            /*Update and render the screen*/
+            SDL_UpdateTexture
+                (
+                texture,
+                NULL,
+                &final_pixels[0],
+                WIDTH * 4
+                );
+            SDL_RenderCopy( renderer, texture, NULL, NULL );
+
+            SDL_RenderPresent( renderer );
+            continue;
+        }
+
 
         /*Create the random pixels*/
         hsv hsv_val;
         rgb rgb_val;
-        hsv_val.s = 1.0;
-        hsv_val.v = 1.0;
+
+        if (((full_cntr+1)%pattern_ptr->duration) < pattern_ptr->transition)
+        {
+            sigma_effect -= 999.0/pattern_ptr->transition;
+        }
+        else if (((full_cntr+1)%pattern_ptr->duration) > (pattern_ptr->duration - pattern_ptr->transition))
+        {
+            sigma_effect += 999.0/pattern_ptr->transition;
+        }
+        else
+        {
+            sigma_effect = 1;
+        }
+        if (sigma_effect < 1)
+        {
+            sigma_effect = 1;
+        }
 #if GLOBAL_SIGMA
         double sigma = pow(2,abs((double)full_cntr - 1000.0)/100);
 #endif  
-        uint16_t count = getPeopleCount();
+        uint16_t count_raw = 0;
+        if(fake_mode%2)
+        {
+            count_raw = fake_count;
+        }
+        else 
+        {
+            count_raw = getPeopleCount();
+        }
+        uint16_t count = PIXELS_PER_RUN*getPeopleCount(count_A, count_B, count_raw);
         if (count > PIXELS_PER_RUN)
         {
             count = PIXELS_PER_RUN;
@@ -566,7 +842,23 @@ int main( int argc, char** argv )
             double sigma = sigmas[y*WIDTH + x]; 
 #endif
             /*Get a random hue value and convert it to rgb*/
-            hsv_val.h = getRandom(color[(y*WIDTH + x)],sigma,0,360); 
+
+            sigma *= sqrt(sigma_effect);
+            if (sigma > 1000)
+            {
+                sigma = 1000;
+            }
+            hsv_val.h = getRandom(color[(y*WIDTH + x)*3 + 0],sigma,0,360); 
+            if (sigma > 100)
+            {
+                hsv_val.s = 1;
+                hsv_val.v = 1;
+            }
+            else
+            {
+                hsv_val.s = ((double)color[(y*WIDTH + x)*3 + 1])/100.0;
+                hsv_val.v = ((double)color[(y*WIDTH + x)*3 + 2])/100.0;
+            }
             rgb_val = hsv2rgb(hsv_val);
 
             /*Store the value in the buffer*/
@@ -603,7 +895,6 @@ int main( int argc, char** argv )
 
             }
         }
-        cout << endl;
 
 #if TIME_DEBUG
         const Uint64 pos4 = SDL_GetPerformanceCounter();
@@ -619,8 +910,37 @@ int main( int argc, char** argv )
             WIDTH * 4
             );
         SDL_RenderCopy( renderer, texture, NULL, NULL );
-        SDL_RenderPresent( renderer );
 
+
+
+        if (o_show_type%3 != 2)
+        {
+            std::string peopleCount_str = "";
+            SDL_Rect Message_rect; //create a rect
+            Message_rect.x = 0;  //controls the rect's x coordinate 
+            Message_rect.y = 0; // controls the rect's y coordinte
+            Message_rect.w = 100; // controls the width of the rect
+            Message_rect.h = 60; // controls the height of the rect
+            if (o_show_type%3 == 0)
+            {
+                peopleCount_str = std::to_string(count);
+                Message_rect.w = 100; // controls the width of the rect
+            }
+            else if (o_show_type%3 == 1)
+            {
+                peopleCount_str = std::to_string(count) + "/" + std::to_string(count_raw);
+                Message_rect.w = 200; // controls the width of the rect
+            }
+            SDL_Surface* surfaceMessage = TTF_RenderText_Solid(Sans, peopleCount_str.c_str(), White); // as TTF_RenderText_Solid could only be used on SDL_Surface then you have to create the surface first
+            
+            SDL_Texture* Message = SDL_CreateTextureFromSurface(renderer, surfaceMessage); //now you can convert it into a texture
+            
+
+            
+            SDL_RenderCopy(renderer, Message, NULL, &Message_rect);
+        }
+
+        SDL_RenderPresent( renderer );
 #if TIME_DEBUG
         const Uint64 end = SDL_GetPerformanceCounter();
         const static Uint64 freq = SDL_GetPerformanceFrequency();
