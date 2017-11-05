@@ -35,7 +35,7 @@ using namespace std;
 #define TRANSITION_N    250
 
 #define READ_SIZE       6
-#define N_PATTERNS      10
+#define N_PATTERNS      11
 
 #define MULTIPLE_GEOMETRIES     1
 #define MULTIPLE_SIZES          0
@@ -477,8 +477,8 @@ int main( int argc, char** argv )
     create_rainbow(color_rainbow_2, 50);
     create_rainbow(color_rainbow_3, 100);
     
-    uint16_t *color_flag_gay = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
-    uint16_t color_list_gay[] = {\
+    uint16_t *color_flag_lgbt = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t color_list_lgbt[] = {\
         359, 85, 74,\
           6, 83, 94,\
          51,100,100,\
@@ -486,7 +486,7 @@ int main( int argc, char** argv )
         226, 64, 64,\
         294, 69, 54
     };
-    create_flag(color_list_gay, 6, color_flag_gay);
+    create_flag(color_list_lgbt, 6, color_flag_lgbt);
 
     uint16_t *color_flag_bi = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
     uint16_t color_list_bi[] = {\
@@ -508,6 +508,30 @@ int main( int argc, char** argv )
     };
     create_flag(color_list_trans, 5, color_flag_trans);
 
+    uint16_t *color_flag_assex = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t color_list_assex[] = {\
+          0,  0,  0,\
+          0,  0, 64,\
+          0,  0,100,\
+        301,100, 51\
+    };
+    create_flag(color_list_assex, 4, color_flag_assex);
+
+    uint16_t *color_flag_lgbt_2 = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t)*3);
+    uint16_t color_list_lgbt_2[] = {\
+          0,  0,  0,\
+         35, 82, 47,\
+          0,100,100,\
+         33,100,100,\
+         54,100,100,\
+        117, 94, 62,\
+        218, 98, 69,\
+        291, 79, 86,\
+    };
+    create_flag(color_list_lgbt_2, 7, color_flag_lgbt_2);
+
+
+
     uint16_t *color_amudi = (uint16_t*)malloc(WIDTH*HEIGHT*sizeof(uint16_t));
     double *full_sigmas[N_PATTERNS];
     double *sigmas = (double*)malloc(WIDTH*HEIGHT*sizeof(double));
@@ -528,9 +552,11 @@ int main( int argc, char** argv )
 
     pattern white_noise = createPattern(sigmas_base, color_rainbow_1);
 
-    pattern gay_flag    = createPattern(sigmas_flag, color_flag_gay);
+    pattern lgbt_flag    = createPattern(sigmas_flag, color_flag_lgbt);
+    pattern lgbt_2_flag    = createPattern(sigmas_flag, color_flag_lgbt_2);
     pattern bi_flag     = createPattern(sigmas_flag, color_flag_bi);
     pattern trans_flag  = createPattern(sigmas_flag, color_flag_trans);
+    pattern assex_flag  = createPattern(sigmas_flag, color_flag_assex);
 
     pattern rainbow1_amudi = createPattern(sigmas_amudimon, color_rainbow_1, CHANGE_N/3, 0);
     pattern rainbow2_amudi = createPattern(sigmas_amudimon, color_rainbow_2, CHANGE_N/3, 0);
@@ -550,16 +576,18 @@ int main( int argc, char** argv )
     rainbow2_SEDEP.is_first = 0;
     rainbow3_SEDEP.is_first = 0;
 
-    patterns[0]  = white_noise;
-    patterns[1]  = trans_flag;
-    patterns[2]  = gay_flag;
-    patterns[3]  = bi_flag;
-    patterns[4]  = rainbow1_amudi;
-    patterns[5]  = rainbow2_amudi;
-    patterns[6]  = rainbow3_amudi;
-    patterns[7]  = rainbow1_SEDEP;
-    patterns[8]  = rainbow2_SEDEP;
-    patterns[9]  = rainbow3_SEDEP;
+    patterns[0]   = white_noise;
+    patterns[1]   = trans_flag;
+    patterns[2]   = lgbt_flag;
+    patterns[3]   = bi_flag;
+    patterns[3]   = assex_flag;
+    patterns[4]   = rainbow1_amudi;
+    patterns[5]   = rainbow2_amudi;
+    patterns[6]   = rainbow3_amudi;
+    patterns[7]   = rainbow1_SEDEP;
+    patterns[8]   = rainbow2_SEDEP;
+    patterns[9]   = rainbow3_SEDEP;
+    patterns[10]  = lgbt_2_flag;
 
     /* Check All sigmas and colors */
     for (uint8_t i = 0; i < N_PATTERNS; i++)
@@ -646,8 +674,8 @@ int main( int argc, char** argv )
     /*Load the initial pattern*/
     double sigma_effect = 1000;
     double count_A = 0.5, count_B = 0;
-    uint8_t o_show_type = 0, fake_mode = 0, pause_mode = 0;
-            uint16_t fake_count = 20;
+    uint8_t o_show_type = 0, fake_mode = 0, pause_mode = 0, shift_on = 0;
+    uint16_t fake_count = 20;
     pattern *pattern_ptr = &patterns[4];
     while( running )
     {
@@ -724,54 +752,68 @@ int main( int argc, char** argv )
                 running = false;
                 break;
             }
-            else if (771 == event.type && 65 == event.key.keysym.scancode )
+            else if (SDL_KEYDOWN == event.type && 225 == event.key.keysym.scancode )
             {
-                count_A += 0.01;
+                shift_on = 1;
             }
-            else if (771 == event.type && 97 == event.key.keysym.scancode )
+            else if (SDL_KEYUP == event.type && 225 == event.key.keysym.scancode )
             {
-                count_A -= 0.01;
-                if (count_A < 0)
+                shift_on = 0;
+            }
+            else if (SDL_KEYDOWN == event.type && 4 == event.key.keysym.scancode )
+            {
+                if (shift_on)
                 {
-                    count_A = 0;
+                    count_A += 0.01;
+                }
+                else
+                {
+                    count_A -= 0.01;
+                    if (count_A < 0)
+                    {
+                        count_A = 0;
+                    }
                 }
             }
-            else if (771 == event.type && 66 == event.key.keysym.scancode )
+            else if (SDL_KEYDOWN == event.type && 5 == event.key.keysym.scancode )
             {
-                count_B += 0.25;
-            }
-            else if (771 == event.type && 98 == event.key.keysym.scancode )
-            {
-                count_B -= 0.25;
-                if (count_B < 0)
+                if (shift_on)
                 {
-                    count_B = 0;
+                    count_B += 0.25;
+                }
+                else
+                {
+                    count_B -= 0.25;
+                    if (count_B < 0)
+                    {
+                        count_B = 0;
+                    }
                 }
             }
-            else if (771 == event.type && 111 == event.key.keysym.scancode )
+            else if (SDL_KEYDOWN == event.type && 18 == event.key.keysym.scancode )
             {
                 o_show_type += 1;
             }
-            else if (771 == event.type && 102 == event.key.keysym.scancode )
+            else if (SDL_KEYDOWN == event.type && 9 == event.key.keysym.scancode )
             {
                 fake_mode += 1;
             }
-            else if (771 == event.type && (65451 == event.key.keysym.scancode || 43 == event.key.keysym.scancode))
+            else if (SDL_KEYDOWN == event.type && (87 == event.key.keysym.scancode || 46 == event.key.keysym.scancode))
             {
                 fake_count += 1;
             }
-            else if (771 == event.type && (65453 == event.key.keysym.scancode || 45 == event.key.keysym.scancode))
+            else if (SDL_KEYDOWN == event.type && (86 == event.key.keysym.scancode || 45 == event.key.keysym.scancode))
             {
                 if (fake_count > 0)
                 {
                     fake_count -= 1;
                 }
             }
-            else if (771 == event.type && 112 == event.key.keysym.scancode )
+            else if (SDL_KEYDOWN == event.type && 19 == event.key.keysym.scancode )
             {
                 pause_mode += 1;
             }
-            cout << SDL_KEYDOWN << "," << event.type << "," << event.key.keysym.scancode << ", " << count_A << "\n";
+            cout << SDL_KEYDOWN << "," << event.type << "," << event.key.keysym.scancode << ", " << shift_on << "\n";
         }
 
         if (pause_mode%2)
