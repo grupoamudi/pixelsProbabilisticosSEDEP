@@ -954,8 +954,8 @@ int main( int argc, char** argv )
         SDL_RenderCopy( renderer, texture, NULL, NULL );
 
 
-
-        if (o_show_type%3 != 2)
+        
+        if (o_show_type%3 != 2 && Sans != NULL)
         {
             std::string peopleCount_str = "";
             SDL_Rect Message_rect; //create a rect
