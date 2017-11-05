@@ -28,8 +28,7 @@ extern "C" {
 #define MAC_LIMIT               700
 #define CHANNEL_HOP_INTERVAL_MS (60000/14)
 
-#define DEBUG_MAC               0
-#define BINARY_OUTPUT           1
+#define DEBUG               1
 
 static os_timer_t channelHop_timer;
 static uint8_t mac_list[MAC_LIMIT*6];
@@ -171,12 +170,8 @@ void promiscCallback(uint8* buf, uint16 len)
             {
               if(nmacs < MAC_LIMIT)
               {
-#if DEBUG_MAC
-                for(uint8_t i = 0; i < 6; i++)
-                {
-                  printf("%d,", mac[i]);
-                }
-                printf("\n");
+#if DEBUG
+                printf(".");
 #endif
                 memcpy(&mac_list[nmacs*6], mac, 6);
                 nmacs += 1;
@@ -196,12 +191,12 @@ void channelHop()
   if (new_channel > 14)
   {
     new_channel = 1;
-#if BINARY_OUTPUT
+#if DEBUG
+    printf("%d\n", nmacs);
+#else
     /*In order to facilitate reading going to print as 2 bytes*/
     uint8_t *nmacs_ptr = (uint8_t *)&nmacs;
-    printf("%c%c", nmacs_ptr[0], nmacs_ptr[1]);
-#else
-    printf("%d\n", nmacs);
+    printf("%c%c", nmacs_ptr[0], nmacs_ptr[1]);  
 #endif
     nmacs = 0;
   }

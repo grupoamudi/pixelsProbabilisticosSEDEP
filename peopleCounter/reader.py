@@ -15,5 +15,8 @@ while True:
     f = open('counter.txt', 'a')
     f.write(line)
     f.close()
+    f = open('counter.bin', 'wb')
+    f.write(struct.pack("<H", nmacs))
+    f.close()
     print(line)
 
