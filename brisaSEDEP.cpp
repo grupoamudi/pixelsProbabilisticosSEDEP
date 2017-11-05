@@ -10,19 +10,19 @@
 #include <fstream>
 
 using namespace std;
-#define RASP_MODE       1
+#define RASP_MODE       0
 
 #if RASP_MODE
     #define WIDTH           656
     #define HEIGHT          416 
-    #define N_BUFFERS       50
+    #define N_BUFFERS       100
     #define PIXELS_PER_RUN  200
     #define CHANGE_N        1000
     #define TRANSITION_N    100
 #else
     #define WIDTH           1280
     #define HEIGHT          1024
-    #define N_BUFFERS       50
+    #define N_BUFFERS       100
     #define PIXELS_PER_RUN  1000
     #define CHANGE_N        4000
     #define TRANSITION_N    250
@@ -683,7 +683,7 @@ int main( int argc, char** argv )
     /*Load the initial pattern*/
     double sigma_effect = 1000;
     double count_A = 0.5, count_B = 0;
-    uint8_t o_show_type = 0, fake_mode = 0, pause_mode = 0, shift_on = 0;
+    uint8_t o_show_type = 0, fake_mode = 0, pause_mode = 0, shift_on = 0, white_noise_mode = 1;
     uint16_t fake_count = 20;
     pattern *pattern_ptr = &patterns[4];
     while( running )
@@ -700,12 +700,17 @@ int main( int argc, char** argv )
             sigma_effect = 1000;
             if (pattern_ptr->next_pattern == NULL)
             {
-                do
+                if(!white_noise_mode || rand()%4 == 0)
                 {
-                    uint16_t sigma_state = rand() % N_PATTERNS;
-                    cout << "sigma_state: " << sigma_state << "\n";
-                    pattern_ptr = &patterns[sigma_state];
-                }while(!pattern_ptr->is_first);
+                    do
+                    {
+                        uint16_t sigma_state = rand() % N_PATTERNS;
+                        cout << "sigma_state: " << sigma_state << "\n";
+                        pattern_ptr = &patterns[sigma_state];
+                    }while(!pattern_ptr->is_first);
+                } else {
+                    pattern_ptr = &patterns[0];
+                }
             }
             else
             {
@@ -821,6 +826,10 @@ int main( int argc, char** argv )
             else if (SDL_KEYDOWN == event.type && 19 == event.key.keysym.scancode )
             {
                 pause_mode += 1;
+            }
+            else if (SDL_KEYDOWN == event.type && 22 == event.key.keysym.scancode )
+            {
+                white_noise_mode += 1;
             }
             cout << SDL_KEYDOWN << "," << event.type << "," << event.key.keysym.scancode << ", " << shift_on << "\n";
         }
