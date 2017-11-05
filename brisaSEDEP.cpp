@@ -17,8 +17,8 @@ using namespace std;
     #define HEIGHT          416 
     #define N_BUFFERS       50
     #define PIXELS_PER_RUN  200
-    #define CHANGE_N        400
-    #define TRANSITION_N    25
+    #define CHANGE_N        1000
+    #define TRANSITION_N    100
 #else
     #define WIDTH           1280
     #define HEIGHT          1024
