@@ -17,11 +17,16 @@ using namespace std;
     #define HEIGHT          416 
     #define N_BUFFERS       50
     #define PIXELS_PER_RUN  200
+    #define CHANGE_N        400
+    #define TRANSITION_N    25
 #else
     #define WIDTH           1280
     #define HEIGHT          1024
     #define N_BUFFERS       50
     #define PIXELS_PER_RUN  1000
+    #define CHANGE_N        4000
+    #define TRANSITION_N    250
+
 #endif
 
 #define SIZE_PIXELS     (WIDTH*HEIGHT*4)
@@ -31,8 +36,6 @@ using namespace std;
 
 #define GLOBAL_SIGMA        0
 
-#define CHANGE_N        4000
-#define TRANSITION_N    250
 
 #define READ_SIZE       6
 #define N_PATTERNS      11
@@ -617,6 +620,12 @@ int main( int argc, char** argv )
 
     TTF_Font* Sans = TTF_OpenFont("DejaVuSansMono.ttf", 60); //this opens a font style and sets a size
     SDL_Color White = {255, 255, 255};  // this is the color in rgb format, maxing out all would give you the color white, and it will be your text's color
+    SDL_Rect Message_rect; //create a rect
+    Message_rect.x = 0;  //controls the rect's x coordinate 
+    Message_rect.y = 0; // controls the rect's y coordinte
+    Message_rect.w = 100; // controls the width of the rect
+    Message_rect.h = 60; // controls the height of the rect
+
     atexit( SDL_Quit );
 
     SDL_Window* window = SDL_CreateWindow
@@ -958,11 +967,7 @@ int main( int argc, char** argv )
         if (o_show_type%3 != 2 && Sans != NULL)
         {
             std::string peopleCount_str = "";
-            SDL_Rect Message_rect; //create a rect
-            Message_rect.x = 0;  //controls the rect's x coordinate 
-            Message_rect.y = 0; // controls the rect's y coordinte
-            Message_rect.w = 100; // controls the width of the rect
-            Message_rect.h = 60; // controls the height of the rect
+
             if (o_show_type%3 == 0)
             {
                 peopleCount_str = std::to_string(count);
@@ -977,9 +982,12 @@ int main( int argc, char** argv )
             
             SDL_Texture* Message = SDL_CreateTextureFromSurface(renderer, surfaceMessage); //now you can convert it into a texture
             
-
-            
-            SDL_RenderCopy(renderer, Message, NULL, &Message_rect);
+            if (Message != NULL && surfaceMessage != NULL)
+            {
+                SDL_RenderCopy(renderer, Message, NULL, &Message_rect);
+            }
+            SDL_DestroyTexture(Message);
+            SDL_FreeSurface(surfaceMessage);
         }
 
         SDL_RenderPresent( renderer );
