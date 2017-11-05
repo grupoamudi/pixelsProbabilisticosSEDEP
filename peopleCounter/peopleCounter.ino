@@ -28,7 +28,7 @@ extern "C" {
 #define MAC_LIMIT               700
 #define CHANNEL_HOP_INTERVAL_MS (60000/14)
 
-#define DEBUG               1
+#define DEBUG               0
 
 static os_timer_t channelHop_timer;
 static uint8_t mac_list[MAC_LIMIT*6];
