@@ -10,7 +10,7 @@
 #include <fstream>
 
 using namespace std;
-#define RASP_MODE       0
+#define RASP_MODE       1
 
 #if RASP_MODE
     #define WIDTH           656
@@ -555,8 +555,8 @@ int main( int argc, char** argv )
 
     pattern white_noise = createPattern(sigmas_base, color_rainbow_1);
 
-    pattern lgbt_flag    = createPattern(sigmas_flag, color_flag_lgbt);
-    pattern lgbt_2_flag    = createPattern(sigmas_flag, color_flag_lgbt_2);
+    pattern lgbt_flag   = createPattern(sigmas_flag, color_flag_lgbt);
+    pattern lgbt_2_flag = createPattern(sigmas_flag, color_flag_lgbt_2);
     pattern bi_flag     = createPattern(sigmas_flag, color_flag_bi);
     pattern trans_flag  = createPattern(sigmas_flag, color_flag_trans);
     pattern assex_flag  = createPattern(sigmas_flag, color_flag_assex);
@@ -700,7 +700,7 @@ int main( int argc, char** argv )
             sigma_effect = 1000;
             if (pattern_ptr->next_pattern == NULL)
             {
-                if(!white_noise_mode || rand()%4 == 0)
+                if(!white_noise_mode%2 || rand()%4 == 0)
                 {
                     do
                     {
@@ -831,7 +831,7 @@ int main( int argc, char** argv )
             {
                 white_noise_mode += 1;
             }
-            cout << SDL_KEYDOWN << "," << event.type << "," << event.key.keysym.scancode << ", " << shift_on << "\n";
+            cout << SDL_KEYDOWN << "," << event.type << "," << event.key.keysym.scancode << ", " << shift_on << "," << white_noise_mode << "\n";
         }
 
         if (pause_mode%2)
