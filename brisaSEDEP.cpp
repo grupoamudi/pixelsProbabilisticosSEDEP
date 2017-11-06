@@ -259,7 +259,7 @@ rgb hsv2rgb(hsv in)
 /*It uses box-muller to convert from the constrained uniform distribution of the rand() function*/
 double getRandom(double mu, double sigma, double min, double max)
 {
-    static const double epsilon = std::numeric_limits<double>::min();
+    static const double epsilon = numeric_limits<double>::min();
     static double z1;
 	static bool generate;
 	generate = !generate;
@@ -326,7 +326,7 @@ double getPeopleCount(double a, double b)
 }
 
 
-int get_file_size(std::string filename) // path to file
+int get_file_size(string filename) // path to file
 {
     FILE *p_file = NULL;
     p_file = fopen(filename.c_str(),"rb");
@@ -386,7 +386,7 @@ pattern createPattern(double *sigma, uint16_t *color)
     return createPattern(sigma, color, CHANGE_N, TRANSITION_N);
 }
 
-void load_std(std::string filename, double *sigmas)
+void load_std(string filename, double *sigmas)
 {
     /*Read file to load a pattern
       this file is generatad by running the scripts createImage.py  parseImages.py*/
@@ -975,16 +975,16 @@ int main( int argc, char** argv )
         
         if (o_show_type%3 != 2 && Sans != NULL)
         {
-            std::string peopleCount_str = "";
+            string peopleCount_str = "";
 
             if (o_show_type%3 == 0)
             {
-                peopleCount_str = std::to_string(count);
+                peopleCount_str = to_string(count);
                 Message_rect.w = 100; // controls the width of the rect
             }
             else if (o_show_type%3 == 1)
             {
-                peopleCount_str = std::to_string(count) + "/" + std::to_string(count_raw);
+                peopleCount_str = to_string(count) + "/" + to_string(count_raw);
                 Message_rect.w = 200; // controls the width of the rect
             }
             SDL_Surface* surfaceMessage = TTF_RenderText_Solid(Sans, peopleCount_str.c_str(), White); // as TTF_RenderText_Solid could only be used on SDL_Surface then you have to create the surface first
