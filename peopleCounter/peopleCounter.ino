@@ -196,7 +196,7 @@ void channelHop()
 #else
     /*In order to facilitate reading going to print as 2 bytes*/
     uint8_t *nmacs_ptr = (uint8_t *)&nmacs;
-    printf("%c%c", nmacs_ptr[0], nmacs_ptr[1]);  
+    printf("000%c%c", nmacs_ptr[0], nmacs_ptr[1]);  
 #endif
     nmacs = 0;
   }
